@@ -1,0 +1,44 @@
+# Publica o mapa no GitHub Pages. A chave do Google Maps vem do segredo do repositório
+# GOOGLE_MAPS_BROWSER_KEY e só entra no config.js gerado aqui; ela não fica nos arquivos do repositório.
+name: Publicar mapa
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gerar config.js com a chave do Google Maps
+        env:
+          GOOGLE_MAPS_BROWSER_KEY: ${{ secrets.GOOGLE_MAPS_BROWSER_KEY }}
+        run: |
+          if [ -z "$GOOGLE_MAPS_BROWSER_KEY" ]; then
+            echo "::warning::Segredo GOOGLE_MAPS_BROWSER_KEY não definido: o mapa vai mostrar o aviso de chave ausente."
+          fi
+          node -e 'require("fs").writeFileSync("config.js", "window.RADAR_MAPS_KEY = " + JSON.stringify(process.env.GOOGLE_MAPS_BROWSER_KEY || "") + ";\n")'
+      - name: Montar o site
+        run: |
+          mkdir _site
+          cp index.html config.js imoveis.json .nojekyll _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

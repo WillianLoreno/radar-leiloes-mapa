@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Radar Leilões · Mapa</title>
+  <meta name="description" content="Imóveis em leilão no Google Maps, com score de oportunidade, lance e desconto.">
+  <meta name="theme-color" content="#1f4e79">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%231f4e79%22/%3E%3Ctext x=%2250%22 y=%2270%22 font-size=%2260%22 text-anchor=%22middle%22 fill=%22white%22%3E⚖%3C/text%3E%3C/svg%3E">
+  <style>
+    /* Layout: barra de filtros no topo, mapa ocupando o resto da tela. */
+    :root {
+      --bg: #f4f6f9; --surface: #ffffff; --surface-2: #eef2f7; --border: #d9e0e8;
+      --text: #1c2430; --muted: #5f6b7a; --primary: #1f4e79; --primary-contrast: #fff;
+      --good: #1e7d4f; --ok: #2a6db0; --warn: #b07400; --bad: #c0392b; --nd: #6b7686;
+      --good-bg: #e2f4ea; --ok-bg: #e2eefa; --warn-bg: #fdf1dc; --bad-bg: #fbe5e3;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #11161d; --surface: #19202a; --surface-2: #222b37; --border: #2f3a48; --text: #e6ebf1; --muted: #9aa6b4;
+        --primary: #5b9bd5; --primary-contrast: #0d1520; --good-bg: #173326; --ok-bg: #172a3e; --warn-bg: #3a2c12; --bad-bg: #3d1c1a; color-scheme: dark; }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; }
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: max(8px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) 8px max(14px, env(safe-area-inset-left, 0px));
+      display: flex; flex-direction: column; gap: 8px; z-index: 2;
+    }
+    .linha { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .marca { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1rem; margin-right: auto; }
+    .marca i { width: 28px; height: 28px; border-radius: 8px; background: var(--primary); color: var(--primary-contrast); display: grid; place-items: center; font-style: normal; }
+    .conta { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+    .filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+    select, .chip { font: inherit; font-size: .85rem; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); min-height: 36px; }
+    .chip { cursor: pointer; white-space: nowrap; }
+    .chip[aria-pressed="true"] { background: var(--ok-bg); color: var(--ok); border-color: currentColor; font-weight: 700; }
+    #mapa { flex: 1; min-height: 0; }
+    .aviso { margin: auto; max-width: 520px; padding: 24px; text-align: center; color: var(--muted); }
+    .legenda { display: flex; gap: 10px; flex-wrap: wrap; font-size: .75rem; color: var(--muted); }
+    .legenda span { display: inline-flex; align-items: center; gap: 4px; }
+    .ponto { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .p-excelente { background: var(--good); } .p-boa { background: var(--ok); } .p-regular { background: var(--warn); }
+    .p-fraca, .p-inviavel { background: var(--bad); } .p-nd { background: var(--nd); }
+    .aprox { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 2px solid var(--nd); background: transparent; }
+    /* Janela do marcador (fica no fundo branco do Google, por isso cores fixas e legíveis). */
+    .iw { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1c2430; max-width: 280px; }
+    .iw h3 { font-size: .95rem; margin: 0 0 4px; }
+    .iw .sub { color: #5f6b7a; margin-bottom: 6px; }
+    .iw .num { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
+    .iw .num span { color: #5f6b7a; font-size: .75rem; display: block; }
+    .iw .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-weight: 700; font-size: .75rem; margin-right: 4px; }
+    .t-excelente { background: #e2f4ea; color: #1e7d4f; } .t-boa { background: #e2eefa; color: #2a6db0; } .t-regular { background: #fdf1dc; color: #9a6200; }
+    .t-fraca, .t-inviavel { background: #fbe5e3; color: #b3261e; } .t-nd { background: #eef2f7; color: #5f6b7a; }
+    .iw .acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+    .iw .acoes a { padding: 6px 10px; border-radius: 8px; border: 1px solid #d9e0e8; color: #1c2430; text-decoration: none; font-weight: 600; font-size: .8rem; }
+    .iw .acoes a.pri { background: #1f4e79; border-color: #1f4e79; color: #fff; }
+    .iw .obs { color: #9a6200; font-size: .75rem; margin-top: 6px; }
+    @media (max-width: 640px) {
+      .legenda { display: none; }
+      .filtros select { flex: 1 1 calc(33% - 8px); min-width: 0; }
+      .filtros .chip { flex: 1 1 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="linha">
+      <div class="marca"><i>⚖</i>Radar Leilões · Mapa</div>
+      <span class="conta" id="conta">Carregando…</span>
+    </div>
+    <div class="filtros">
+      <select id="f-tipo" aria-label="Tipo"><option value="">Todos os tipos</option></select>
+      <select id="f-uf" aria-label="Estado"><option value="">Todos os estados</option></select>
+      <select id="f-fonte" aria-label="Fonte"><option value="">Todas as fontes</option></select>
+      <select id="f-score" aria-label="Score mínimo"><option value="">Qualquer score</option><option value="70">Excelente (70+)</option><option value="55">Boa ou melhor (55+)</option><option value="40">Regular ou melhor (40+)</option></select>
+      <button type="button" class="chip" id="f-fin" aria-pressed="false">🏦 Aceita financiamento</button>
+    </div>
+    <div class="legenda" aria-hidden="true">
+      <span><i class="ponto p-excelente"></i>Excelente</span><span><i class="ponto p-boa"></i>Boa</span><span><i class="ponto p-regular"></i>Regular</span>
+      <span><i class="ponto p-fraca"></i>Fraca</span><span><i class="ponto p-nd"></i>Sem valor de mercado</span><span><i class="aprox"></i>Posição aproximada (centro da cidade)</span>
+    </div>
+  </header>
+  <div id="mapa"><div class="aviso">Carregando o mapa…</div></div>
+
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/@googlemaps/markerclusterer@2.5.3/dist/index.min.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    var CORES = { excelente: '#1e7d4f', boa: '#2a6db0', regular: '#b07400', fraca: '#c0392b', inviavel: '#c0392b', nd: '#6b7686' };
+    var CLASSE = { excelente: 'Excelente', boa: 'Boa', regular: 'Regular', fraca: 'Fraca', inviavel: 'Inviável', nd: 'Sem dados' };
+    var dados = null, mapa = null, info = null, cluster = null, marcadores = [];
+    var brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function el(id) { return document.getElementById(id); }
+    function aviso(msg) { el('mapa').innerHTML = '<div class="aviso">' + msg + '</div>'; }
+
+    // Filtros guardados neste aparelho.
+    var filtros = { tipo: '', uf: '', fonte: '', score: '', fin: false };
+    try { Object.assign(filtros, JSON.parse(localStorage.getItem('radarMapa.filtros') || '{}')); } catch (e) {}
+    function salvar() { try { localStorage.setItem('radarMapa.filtros', JSON.stringify(filtros)); } catch (e) {} }
+
+    function icone(im) {
+      var cor = CORES[im.n] || CORES.nd;
+      var svg = im.x
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="8" fill="' + cor + '" stroke="#fff" stroke-width="2.5"/></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="7" fill="#fff" fill-opacity=".85" stroke="' + cor + '" stroke-width="3"/></svg>';
+      return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), anchor: new google.maps.Point(im.x ? 11 : 10, im.x ? 11 : 10) };
+    }
+
+    function janela(im) {
+      var maps = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(im.x ? im.la + ',' + im.lo : im.q);
+      var rua = 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + im.la + ',' + im.lo;
+      return '<div class="iw"><h3>' + esc(im.t) + '</h3>' +
+        '<div class="sub">' + esc([im.e, im.b, im.c + '/' + im.uf].filter(Boolean).join(' · ')) + '</div>' +
+        '<span class="tag t-' + esc(im.n) + '">' + im.s + ' · ' + esc(CLASSE[im.n] || '') + '</span>' +
+        '<span class="tag t-nd">' + esc(dados.fontes[im.f] || im.f) + '</span>' + (im.fi ? '<span class="tag t-boa">🏦 Financiável</span>' : '') +
+        '<div class="num"><div><span>Lance</span>' + brl.format(im.l) + '</div><div><span>Mercado</span>' + (im.v ? brl.format(im.v) : '—') + '</div>' +
+          '<div><span>Desconto</span>' + (im.v ? im.d.toLocaleString('pt-BR') + '%' : '—') + '</div><div><span>Leilão</span>' + (im.dt ? im.dt.split('-').reverse().join('/') : esc(im.pr || '—')) + '</div></div>' +
+        '<div class="acoes"><a class="pri" href="' + esc(maps) + '" target="_blank" rel="noopener">Abrir no Maps</a>' +
+          (im.x ? '<a href="' + esc(rua) + '" target="_blank" rel="noopener">Street View</a>' : '') +
+          (im.u ? '<a href="' + esc(im.u) + '" target="_blank" rel="noopener">Edital ↗</a>' : '') + '</div>' +
+        (im.x ? '' : '<div class="obs">Posição aproximada: centro da cidade. O anúncio não traz a rua.</div>') + '</div>';
+    }
+
+    function passa(im) {
+      if (filtros.tipo && im.tp !== filtros.tipo) return false;
+      if (filtros.uf && im.uf !== filtros.uf) return false;
+      if (filtros.fonte && im.f !== filtros.fonte) return false;
+      if (filtros.score && im.s < Number(filtros.score)) return false;
+      if (filtros.fin && !im.fi) return false;
+      return true;
+    }
+
+    function desenhar(enquadrar) {
+      var visiveis = [], limites = new google.maps.LatLngBounds();
+      marcadores.forEach(function (m) { if (passa(m.im)) { visiveis.push(m.mk); limites.extend(m.mk.getPosition()); } });
+      cluster.clearMarkers();
+      cluster.addMarkers(visiveis);
+      var exatos = visiveis.filter(function (mk) { return mk.im.x; }).length;
+      el('conta').textContent = visiveis.length.toLocaleString('pt-BR') + ' imóveis · ' + exatos.toLocaleString('pt-BR') + ' no endereço exato · dados de ' + new Date(dados.geradoEm).toLocaleDateString('pt-BR');
+      if (enquadrar && visiveis.length) mapa.fitBounds(limites, 40);
+    }
+
+    function opcoes(id, valores, atual) {
+      var s = el(id);
+      valores.forEach(function (v) { var o = document.createElement('option'); o.value = v[0]; o.textContent = v[1]; s.appendChild(o); });
+      s.value = atual || '';
+    }
+
+    function montarFiltros() {
+      var tipos = {}, ufs = {}, fontes = {};
+      dados.imoveis.forEach(function (im) { tipos[im.tp] = 1; ufs[im.uf] = 1; fontes[im.f] = 1; });
+      opcoes('f-tipo', Object.keys(tipos).filter(Boolean).sort().map(function (t) { return [t, t]; }), filtros.tipo);
+      opcoes('f-uf', Object.keys(ufs).sort().map(function (u) { return [u, u]; }), filtros.uf);
+      opcoes('f-fonte', Object.keys(fontes).sort().map(function (f) { return [f, dados.fontes[f] || f]; }), filtros.fonte);
+      el('f-score').value = filtros.score || '';
+      el('f-fin').setAttribute('aria-pressed', String(!!filtros.fin));
+      ['tipo', 'uf', 'fonte', 'score'].forEach(function (k) {
+        el('f-' + k).addEventListener('change', function () { filtros[k] = this.value; salvar(); desenhar(true); });
+      });
+      el('f-fin').addEventListener('click', function () {
+        filtros.fin = !filtros.fin; this.setAttribute('aria-pressed', String(filtros.fin)); salvar(); desenhar(true);
+      });
+    }
+
+    window.iniciarMapa = function () {
+      fetch('imoveis.json', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (d) {
+        dados = d;
+        mapa = new google.maps.Map(el('mapa'), {
+          center: { lat: -25.5, lng: -50 }, zoom: 6, mapTypeControl: true, streetViewControl: true,
+          fullscreenControl: false, clickableIcons: false, gestureHandling: 'greedy'
+        });
+        info = new google.maps.InfoWindow();
+        marcadores = dados.imoveis.map(function (im) {
+          var mk = new google.maps.Marker({ position: { lat: im.la, lng: im.lo }, icon: icone(im), title: im.t, zIndex: im.x ? 2 : 1 });
+          mk.im = im;
+          mk.addListener('click', function () { info.setContent(janela(im)); info.open({ anchor: mk, map: mapa }); });
+          return { im: im, mk: mk };
+        });
+        cluster = new markerClusterer.MarkerClusterer({ map: mapa, markers: [] });
+        montarFiltros();
+        desenhar(true);
+      }).catch(function () { aviso('Não consegui carregar a lista de imóveis. Recarregue a página.'); });
+    };
+
+    var chave = window.RADAR_MAPS_KEY;
+    if (!chave) { aviso('Falta configurar a chave do Google Maps (config.js).'); el('conta').textContent = ''; return; }
+    window.gm_authFailure = function () { aviso('O Google recusou a chave do mapa. Confira se a Maps JavaScript API está ativa e se a chave libera este endereço.'); };
+    var s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(chave) + '&callback=iniciarMapa&loading=async&language=pt-BR&region=BR';
+    s.async = true;
+    s.onerror = function () { aviso('Não consegui carregar o Google Maps. Confira a conexão.'); };
+    document.head.appendChild(s);
+  })();
+  </script>
+</body>
+</html>
