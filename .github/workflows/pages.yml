@@ -1,5 +1,10 @@
 # Publica o mapa no GitHub Pages. A chave do Google Maps vem do segredo do repositório
-# GOOGLE_MAPS_BROWSER_KEY e só entra no config.js gerado aqui; ela não fica nos arquivos do repositório.
+# GOOGLE_MAPS_BROWSER_KEY e só entra no config.js gerado aqui (window.RADAR_MAPS_KEY, lido pelo
+# index.html); ela não fica nos arquivos do repositório nem aparece no log.
+#
+# Requisitos no repositório:
+#   - Settings → Pages → Build and deployment → Source: "GitHub Actions"
+#   - Settings → Secrets and variables → Actions → segredo GOOGLE_MAPS_BROWSER_KEY
 name: Publicar mapa
 
 on:
@@ -24,21 +29,35 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Gerar config.js com a chave do Google Maps
         env:
           GOOGLE_MAPS_BROWSER_KEY: ${{ secrets.GOOGLE_MAPS_BROWSER_KEY }}
         run: |
-          if [ -z "$GOOGLE_MAPS_BROWSER_KEY" ]; then
-            echo "::warning::Segredo GOOGLE_MAPS_BROWSER_KEY não definido: o mapa vai mostrar o aviso de chave ausente."
+          # Sem a chave o mapa não abre: falha aqui em vez de publicar um site quebrado.
+          if [ -z "${GOOGLE_MAPS_BROWSER_KEY}" ]; then
+            echo "::error title=Chave ausente::O segredo GOOGLE_MAPS_BROWSER_KEY não está definido (ou está vazio). Crie-o em Settings → Secrets and variables → Actions e rode o workflow de novo."
+            exit 1
           fi
-          node -e 'require("fs").writeFileSync("config.js", "window.RADAR_MAPS_KEY = " + JSON.stringify(process.env.GOOGLE_MAPS_BROWSER_KEY || "") + ";\n")'
+          node -e 'require("fs").writeFileSync("config.js", "window.RADAR_MAPS_KEY = " + JSON.stringify(process.env.GOOGLE_MAPS_BROWSER_KEY) + ";\n")'
+          # Confere o arquivo gerado sem mostrar a chave no log.
+          node -e 'global.window = {}; require("./config.js"); if (typeof window.RADAR_MAPS_KEY !== "string" || !window.RADAR_MAPS_KEY) { console.error("config.js gerado sem window.RADAR_MAPS_KEY"); process.exit(1); } console.log("config.js gerado: window.RADAR_MAPS_KEY definida (" + window.RADAR_MAPS_KEY.length + " caracteres)")'
+
       - name: Montar o site
         run: |
+          for f in index.html imoveis.json config.js; do
+            [ -s "$f" ] || { echo "::error::Arquivo $f ausente ou vazio."; exit 1; }
+          done
           mkdir _site
           cp index.html config.js imoveis.json .nojekyll _site/
-      - uses: actions/configure-pages@v5
+
+      - name: Configurar o GitHub Pages
+        uses: actions/configure-pages@v5
+        # Se falhar com "Not Found": ative Settings → Pages → Source: "GitHub Actions" e rode de novo.
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+
       - id: deploy
         uses: actions/deploy-pages@v4
