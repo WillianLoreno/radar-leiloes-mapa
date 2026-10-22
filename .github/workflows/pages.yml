@@ -11,6 +11,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      aceitar_queda:
+        description: "Publicar mesmo com queda de mais de 10% no total ou nos pontos exatos (só se a queda for real)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,6 +47,25 @@ jobs:
           node -e 'require("fs").writeFileSync("config.js", "window.RADAR_MAPS_KEY = " + JSON.stringify(process.env.GOOGLE_MAPS_BROWSER_KEY) + ";\n")'
           # Confere o arquivo gerado sem mostrar a chave no log.
           node -e 'global.window = {}; require("./config.js"); if (typeof window.RADAR_MAPS_KEY !== "string" || !window.RADAR_MAPS_KEY) { console.error("config.js gerado sem window.RADAR_MAPS_KEY"); process.exit(1); } console.log("config.js gerado: window.RADAR_MAPS_KEY definida (" + window.RADAR_MAPS_KEY.length + " caracteres)")'
+
+      # Segunda barreira (a primeira é o robô): dados inválidos ou com queda grande em relação ao que
+      # está no ar não são publicados, e o site continua com a última versão válida.
+      - name: Validar imoveis.json
+        env:
+          ACEITAR_QUEDA: ${{ inputs.aceitar_queda }}
+        run: |
+          if curl -fsS -m 60 -o /tmp/publicado.json "https://willianloreno.github.io/radar-leiloes-mapa/imoveis.json?t=$(date +%s)"; then
+            ANTERIOR="--anterior /tmp/publicado.json"
+          else
+            echo "::warning::Não consegui baixar a versão publicada; validando sem comparar."
+            ANTERIOR=""
+          fi
+          TOL=""
+          [ "${ACEITAR_QUEDA}" = "true" ] && TOL="--tolerancia 1"
+          if ! node scripts/validar-imoveis.js imoveis.json $ANTERIOR $TOL; then
+            echo "::error title=Dados inválidos::imoveis.json não passou na validação; o site continua com a versão anterior."
+            exit 1
+          fi
 
       - name: Montar o site
         run: |
