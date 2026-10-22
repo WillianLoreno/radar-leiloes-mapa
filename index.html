@@ -76,6 +76,8 @@
       <select id="f-uf" aria-label="Estado"><option value="">Todos os estados</option></select>
       <select id="f-fonte" aria-label="Fonte"><option value="">Todas as fontes</option></select>
       <select id="f-score" aria-label="Score mínimo"><option value="">Qualquer score</option><option value="70">Excelente (70+)</option><option value="55">Boa ou melhor (55+)</option><option value="40">Regular ou melhor (40+)</option></select>
+      <select id="f-min" aria-label="Lance mínimo"><option value="">Lance mín.</option></select>
+      <select id="f-max" aria-label="Lance máximo"><option value="">Lance máx.</option></select>
       <button type="button" class="chip" id="f-fin" aria-pressed="false">🏦 Aceita financiamento</button>
     </div>
     <div class="legenda" aria-hidden="true">
@@ -99,7 +101,10 @@
     function aviso(msg) { el('mapa').innerHTML = '<div class="aviso">' + msg + '</div>'; }
 
     // Filtros guardados neste aparelho.
-    var filtros = { tipo: '', uf: '', fonte: '', score: '', fin: false };
+    var filtros = { tipo: '', uf: '', fonte: '', score: '', min: '', max: '', fin: false };
+    // Faixas do filtro de valor (lance), em reais.
+    var FAIXAS = [50e3, 100e3, 150e3, 200e3, 300e3, 400e3, 500e3, 750e3, 1e6, 1.5e6, 2e6, 3e6];
+    function reais(v) { return v >= 1e6 ? 'R$ ' + String(v / 1e6).replace('.', ',') + ' mi' : 'R$ ' + v / 1e3 + ' mil'; }
     try { Object.assign(filtros, JSON.parse(localStorage.getItem('radarMapa.filtros') || '{}')); } catch (e) {}
     function salvar() { try { localStorage.setItem('radarMapa.filtros', JSON.stringify(filtros)); } catch (e) {} }
 
@@ -132,6 +137,8 @@
       if (filtros.fonte && im.f !== filtros.fonte) return false;
       if (filtros.score && im.s < Number(filtros.score)) return false;
       if (filtros.fin && !im.fi) return false;
+      if (filtros.min && !(im.l >= Number(filtros.min))) return false;
+      if (filtros.max && !(im.l > 0 && im.l <= Number(filtros.max))) return false;
       return true;
     }
 
@@ -157,9 +164,11 @@
       opcoes('f-tipo', Object.keys(tipos).filter(Boolean).sort().map(function (t) { return [t, t]; }), filtros.tipo);
       opcoes('f-uf', Object.keys(ufs).sort().map(function (u) { return [u, u]; }), filtros.uf);
       opcoes('f-fonte', Object.keys(fontes).sort().map(function (f) { return [f, dados.fontes[f] || f]; }), filtros.fonte);
+      opcoes('f-min', FAIXAS.map(function (v) { return [v, 'A partir de ' + reais(v)]; }), filtros.min);
+      opcoes('f-max', FAIXAS.map(function (v) { return [v, 'Até ' + reais(v)]; }), filtros.max);
       el('f-score').value = filtros.score || '';
       el('f-fin').setAttribute('aria-pressed', String(!!filtros.fin));
-      ['tipo', 'uf', 'fonte', 'score'].forEach(function (k) {
+      ['tipo', 'uf', 'fonte', 'score', 'min', 'max'].forEach(function (k) {
         el('f-' + k).addEventListener('change', function () { filtros[k] = this.value; salvar(); desenhar(true); });
       });
       el('f-fin').addEventListener('click', function () {
