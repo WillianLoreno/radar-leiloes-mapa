@@ -184,6 +184,9 @@
           fullscreenControl: false, clickableIcons: false, gestureHandling: 'greedy'
         });
         info = new google.maps.InfoWindow();
+        // Clicar fora (no mapa) ou apertar Esc fecha a janela do imóvel.
+        mapa.addListener('click', function () { info.close(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') info.close(); });
         marcadores = dados.imoveis.map(function (im) {
           var mk = new google.maps.Marker({ position: { lat: im.la, lng: im.lo }, icon: icone(im), title: im.t, zIndex: im.x ? 2 : 1 });
           mk.im = im;
