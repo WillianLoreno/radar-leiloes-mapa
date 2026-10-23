@@ -57,6 +57,8 @@
     .iw .acoes { display: flex; gap: 6px; flex-wrap: wrap; }
     .iw .acoes a { padding: 6px 10px; border-radius: 8px; border: 1px solid #d9e0e8; color: #1c2430; text-decoration: none; font-weight: 600; font-size: .8rem; }
     .iw .acoes a.pri { background: #1f4e79; border-color: #1f4e79; color: #fff; }
+    .iw .acoes + .acoes { margin-top: 6px; }
+    .iw .acoes a.fav[aria-pressed="true"] { background: #fdf1dc; border-color: #b07400; color: #8a5a00; }
     .iw .obs { color: #9a6200; font-size: .75rem; margin-top: 6px; }
     @media (max-width: 640px) {
       .legenda { display: none; }
@@ -116,6 +118,26 @@
       return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), anchor: new google.maps.Point(im.x ? 11 : 10, im.x ? 11 : 10) };
     }
 
+    // App Radar Leilões (painel com a análise atualizada). Só um #token simples chega ao app:
+    // #im_<id> abre a ficha do imóvel e #fav_<id> também o marca como favorito.
+    var APP = 'https://claude.ai/artifact/1fPZgCA1MshMhmxzjiHYwy';
+    // Favoritados a partir deste aparelho (a lista oficial fica no app, aba Favoritos).
+    var favoritos = {};
+    try { favoritos = JSON.parse(localStorage.getItem('radarMapa.favoritos') || '{}') || {}; } catch (e) {}
+    function botaoFav(id) {
+      var on = !!favoritos[id];
+      return '<a class="fav" data-fav="' + esc(id) + '" aria-pressed="' + on + '" href="' + esc(APP + (on ? '#im_' : '#fav_') + id) + '" target="_blank" rel="noopener">' +
+        (on ? '★ Favoritado' : '☆ Favoritar') + '</a>';
+    }
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('a[data-fav]');
+      if (!b || b.getAttribute('aria-pressed') === 'true') return; // já favoritado: o link só abre a ficha
+      favoritos[b.dataset.fav] = 1;
+      try { localStorage.setItem('radarMapa.favoritos', JSON.stringify(favoritos)); } catch (err) {}
+      // Troca o botão depois que o navegador seguir o link (que favorita no app).
+      setTimeout(function () { b.outerHTML = botaoFav(b.dataset.fav); }, 0);
+    });
+
     function janela(im) {
       var maps = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(im.x ? im.la + ',' + im.lo : im.q);
       var rua = 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + im.la + ',' + im.lo;
@@ -125,7 +147,8 @@
         '<span class="tag t-nd">' + esc(dados.fontes[im.f] || im.f) + '</span>' + (im.fi ? '<span class="tag t-boa">🏦 Financiável</span>' : '') +
         '<div class="num"><div><span>Lance</span>' + brl.format(im.l) + '</div><div><span>Mercado</span>' + (im.v ? brl.format(im.v) : '—') + '</div>' +
           '<div><span>Desconto</span>' + (im.v ? im.d.toLocaleString('pt-BR') + '%' : '—') + '</div><div><span>Leilão</span>' + (im.dt ? im.dt.split('-').reverse().join('/') : esc(im.pr || '—')) + '</div></div>' +
-        '<div class="acoes"><a class="pri" href="' + esc(maps) + '" target="_blank" rel="noopener">Abrir no Maps</a>' +
+        '<div class="acoes"><a class="pri" href="' + esc(APP + '#im_' + im.id) + '" target="_blank" rel="noopener">Ver no painel</a>' + botaoFav(im.id) + '</div>' +
+        '<div class="acoes"><a href="' + esc(maps) + '" target="_blank" rel="noopener">Abrir no Maps</a>' +
           (im.x ? '<a href="' + esc(rua) + '" target="_blank" rel="noopener">Street View</a>' : '') +
           (im.u ? '<a href="' + esc(im.u) + '" target="_blank" rel="noopener">Edital ↗</a>' : '') + '</div>' +
         (im.x ? '' : '<div class="obs">Posição aproximada: centro da cidade. O anúncio não traz a rua.</div>') + '</div>';
